@@ -1,0 +1,71 @@
+context:
+  version: "1.4.1"
+
+package:
+  name: sfsexp
+  version: ${{ version }}
+
+source:
+  url: https://github.com/mjsottile/sfsexp/archive/refs/tags/v${{ version }}.tar.gz
+  sha256: 3350abef46086e3efb737c65d326ce782c0c45888bfb75717dd0303181e0a078
+
+build:
+  number: 0
+  skip: win
+  dynamic_linking:
+    overlinking_behavior: error
+    overdepending_behavior: error
+  script:
+    - autoreconf -fi
+    - ./configure --prefix="$PREFIX" --disable-static --enable-shared
+    - make -j"$CPU_COUNT"
+    - make install
+    - rm -f "$PREFIX/lib/libsexp.la"
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - autoconf
+    - automake
+    - libtool
+    - make
+  run: []
+
+tests:
+  - script: |
+      python - <<'PY'
+      import ctypes
+      import glob
+      import os
+
+      libraries = glob.glob(os.path.join(os.environ["PREFIX"], "lib", "libsexp.*"))
+      assert libraries, "libsexp was not installed"
+      library = ctypes.CDLL(libraries[0])
+      library.parse_sexp.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+      library.parse_sexp.restype = ctypes.c_void_p
+      library.destroy_sexp.argtypes = [ctypes.c_void_p]
+      expression = library.parse_sexp(b"(notmuch)", 9)
+      assert expression, "parse_sexp failed"
+      library.destroy_sexp(expression)
+      PY
+    requirements:
+      run:
+        - python
+  - package_contents:
+      lib:
+        - sexp
+      include:
+        - sfsexp/sexp.h
+      files:
+        - lib/pkgconfig/sfsexp.pc
+
+about:
+  homepage: https://github.com/mjsottile/sfsexp
+  summary: A small, fast s-expression parser library.
+  license: LGPL-2.1-or-later
+  license_file: LICENSE_LGPL
+  repository: https://github.com/mjsottile/sfsexp
+
+extra:
+  recipe-maintainers:
+    - black-desk
